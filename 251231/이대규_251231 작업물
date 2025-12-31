@@ -1,0 +1,211 @@
+
+Follow_Robot_251231 : 로봇 카메라로 마커 인식 후, 일정 거리(이 코드에서는 마커가 화면에서 차지하는 비율로 거리를 계산함. 그 비율이 width 0.15. 해당 비율을 유지하는 거리)를 유지하며 마커를 따라가는 코드. 
+마커가 멀어지면 마커를 향해 전진하고, 마커가 가까워지면 마커와 거리를 둔다. KP_DIST에 따라 속도가 조정된다.
+
+=========================================
+<dji><attribute><creation_date>2025/12/31</creation_date><sign>f528951e2f781197</sign><modify_time>12/31/2025 2:40:16 PM</modify_time><guid>befabbf24f5049438f74614b4656bfe5</guid><creator>Anonymous</creator><firmware_version_dependency>00.00.0000</firmware_version_dependency><title>Follow_Robot_251231</title><code_type>python</code_type><app_min_version></app_min_version><app_max_version></app_max_version></attribute><audio-list /><code><python_code><![CDATA[# 로보마스터 S1 펫 모드 V3 (고속 반응형)
+# 속도 답답함 해결: P-제어 감도 대폭 상향
+
+pid_yaw = rm_ctrl.PIDCtrl()
+pid_pitch = rm_ctrl.PIDCtrl()
+
+TARGET_WIDTH = 0.15  
+
+# [핵심 수정] 거리 제어 감도(KP)를 1.5 -> 15.0으로 대폭 상향! -> 7.5로 하향. 15는 너무 빠름.
+# 이제 작은 거리 차이에도 민첩하게 반응합니다.
+KP_DIST = 7.5        
+
+def start():
+    # 짐벌 따르기 모드 (효율적 회전의 핵심)
+    robot_ctrl.set_mode(rm_define.robot_mode_chassis_follow)
+    
+    vision_ctrl.enable_detection(rm_define.vision_detection_marker)
+    
+    # 짐벌 PID (조준은 부드럽게 유지)
+    pid_yaw.set_ctrl_params(100, 0, 5)
+    pid_pitch.set_ctrl_params(80, 0, 2)
+    
+    led_ctrl.turn_off(rm_define.armor_all)
+    print("Turbo Pet Mode: Fast & Responsive")
+
+    while True:
+        list_Marker = RmList(vision_ctrl.get_marker_detection_info())
+        
+        if list_Marker[1] >= 1:
+            current_x = list_Marker[3]
+            current_y = list_Marker[4]
+            current_width = list_Marker[5]
+            
+            # --- [A] 짐벌 제어 ---
+            pid_yaw.set_error(current_x - 0.5)
+            pid_pitch.set_error(0.5 - current_y)
+            gimbal_ctrl.rotate_with_speed(pid_yaw.get_output(), pid_pitch.get_output())
+            
+            # --- [B] 거리(속도) 제어 ---
+            # 오차 계산
+            error_dist = TARGET_WIDTH - current_width
+            
+            # 속도 계산 (P-제어)
+            # KP가 15.0이므로 작은 오차에도 큰 속도가 나옴
+            speed_m_s = error_dist * KP_DIST
+            
+            # [추가 기능] 최소 기동 속도 보장 (Deadband Compensation)
+            # 계산된 속도가 너무 느리면(0.1 미만) 아예 안 움직이는 문제를 해결하기 위해
+            # 움직여야 할 상황이면 최소 0.15의 속도는 줍니다.
+            if speed_m_s > 0.05 and speed_m_s < 0.15:
+                speed_m_s = 0.15
+            elif speed_m_s < -0.05 and speed_m_s > -0.15:
+                speed_m_s = -0.15
+            
+            # 최대 속도 제한 (안전상 1.5m/s로 제한)
+            if speed_m_s > 1.5: speed_m_s = 1.5
+            if speed_m_s < -1.5: speed_m_s = -1.5
+            
+            # 정지 구간 (목표에 도달함)
+            if abs(error_dist) < 0.01:
+                speed_m_s = 0
+                led_ctrl.set_top_led(rm_define.armor_top_all, 0, 255, 0, rm_define.effect_always_on)
+            else:
+                # 거리가 멀수록 LED가 붉어지게 연출 (시각적 피드백)
+                if abs(error_dist) > 0.1: # 많이 멀다
+                    led_ctrl.set_top_led(rm_define.armor_top_all, 255, 0, 0, rm_define.effect_always_on)
+                else: # 조금 멀다
+                    led_ctrl.set_top_led(rm_define.armor_top_all, 0, 0, 255, rm_define.effect_always_on)
+            
+            # --- [C] 이동 실행 ---
+            chassis_ctrl.set_trans_speed(abs(speed_m_s))
+            
+            if speed_m_s > 0:
+                chassis_ctrl.move(0)   # 전진
+            elif speed_m_s < 0:
+                chassis_ctrl.move(180) # 후진
+            else:
+                chassis_ctrl.stop()    # 정지
+
+        else:
+            # 놓치면 정지
+            gimbal_ctrl.rotate_with_speed(0, 0)
+            chassis_ctrl.stop()
+            led_ctrl.set_top_led(rm_define.armor_top_all, 255, 255, 0, rm_define.effect_breath)
+
+        time.sleep(0.02)]]></python_code><scratch_description><![CDATA[]]></scratch_description></code></dji>
+==============================================================================
+
+        DISTANCE_move_final : 마커를 장애물로 인식하고, 왼쪽에 마커가 있으면 오른쪽으로 회피. 마커가 오른쪽에 있으면 왼쪽으로 회피한다. 장애물 인식/회피기동 기능 구현 및 테스트.
+        정면에 장애물이 있을 경우 마커 인식을 못하는 경우가 있는데, 이는 해당 상태에서 강제로 오른쪽으로 회피기동 하도록 하여 해결함.
+        ===========================================================================================================
+        <dji><attribute><creation_date>2025/12/31</creation_date><sign>1eeead5e3aa36905</sign><modify_time>12/31/2025 11:41:20 AM</modify_time><guid>6e5f77a660f5497182cf925b0f1010c2</guid><creator>Anonymous</creator><firmware_version_dependency>00.00.0000</firmware_version_dependency><title>Untitled-1</title><code_type>python</code_type><app_min_version></app_min_version><app_max_version></app_max_version></attribute><audio-list /><code><python_code><![CDATA[# 로보마스터 S1 정면 돌진 완전 해결판 (Ghost 회피 적용)
+# 핵심 수정: 보라색(Ghost) 상황에서도 단순히 후진만 하지 않고 옆으로 비켜버림
+
+variable_SafeCounter = 0 
+variable_LastWidth = 0
+variable_LastX = 0.5 # 마지막 X 위치 기억 (초기값 중앙)
+
+def start():
+    global variable_SafeCounter
+    global variable_LastWidth
+    global variable_LastX
+    
+    robot_ctrl.set_mode(rm_define.robot_mode_free)
+    vision_ctrl.enable_detection(rm_define.vision_detection_marker)
+    gimbal_ctrl.recenter()
+    led_ctrl.turn_off(rm_define.armor_all)
+    
+    # 속도를 조금 더 낮춰서 반응성을 높임 (0.5 -> 0.4)
+    chassis_ctrl.set_trans_speed(0.4)
+
+    print("Final Solution: Ghost Evade Active")
+
+    while True:
+        list_Marker = RmList(vision_ctrl.get_marker_detection_info())
+        
+        # ---------------------------------------------------------
+        # [상황 A] 장애물(마커)이 눈에 보임
+        # ---------------------------------------------------------
+        if list_Marker[1] >= 1:
+            variable_SafeCounter = 0
+            
+            current_x = list_Marker[3]
+            current_width = list_Marker[5]
+            
+            # 마지막 상태 업데이트 (사각지대 대비용)
+            variable_LastWidth = current_width
+            variable_LastX = current_x 
+            
+            # 1) 위험 거리 (0.15 이상 - 기준을 살짝 낮춤)
+            if current_width > 0.15:
+                chassis_ctrl.stop()
+                led_ctrl.set_top_led(rm_define.armor_top_all, 255, 0, 0, rm_define.effect_flash)
+                
+                # --- 정면 장애물 처리 ---
+                if 0.35 <= current_x <= 0.65:
+                    print("RED: Front Danger! Backup & Slide")
+                    # [콤보] 후진 -> 우측 이동
+                    chassis_ctrl.move_with_time(180, 0.7)
+                    chassis_ctrl.move_with_time(90, 1.0)
+                    
+                # --- 측면 장애물 처리 ---
+                elif current_x > 0.65: # 오른쪽 장애물
+                    print("RED: Right Danger -> Left")
+                    chassis_ctrl.move_with_time(-90, 1.0)
+                else: # 왼쪽 장애물
+                    print("RED: Left Danger -> Right")
+                    chassis_ctrl.move_with_time(90, 1.0)
+                
+                # 회피 후 기억 리셋
+                variable_LastWidth = 0
+                time.sleep(0.1)
+
+            # 2) 주의 거리 (0.11 ~ 0.15)
+            elif current_width > 0.11:
+                led_ctrl.set_top_led(rm_define.armor_top_all, 255, 255, 0, rm_define.effect_always_on)
+                chassis_ctrl.set_trans_speed(0.15) # 저속 접근
+                chassis_ctrl.move(0) 
+                
+            # 3) 안전 거리
+            else:
+                led_ctrl.set_top_led(rm_define.armor_top_all, 0, 255, 0, rm_define.effect_always_on)
+                chassis_ctrl.set_trans_speed(0.4)
+                chassis_ctrl.move(0)
+
+        # ---------------------------------------------------------
+        # [상황 B] 마커가 안 보임 (사각지대 or 안전)
+        # ---------------------------------------------------------
+        else:
+            # [핵심 수정] 보라색(Ghost) 상황 발생 시 처리 로직 변경
+            # 마커가 안 보이지만, 직전까지 '주의/위험' 거리였다면?
+            if variable_LastWidth > 0.11:
+                print("PURPLE: Ghost Obstacle! Backup & Slide")
+                led_ctrl.set_top_led(rm_define.armor_top_all, 255, 0, 255, rm_define.effect_flash)
+                
+                # 기존에는 여기서 후진만 했기 때문에 다시 전진하다가 충돌함.
+                # 여기서도 '정면'에 있었다면 똑같이 회피 콤보를 날려줍니다.
+                
+                # 1. 일단 후진 (시야 확보)
+                chassis_ctrl.move_with_time(180, 0.7)
+                
+                # 2. 마지막 위치가 정면이었다면? -> 강제 옆으로 이동!
+                if 0.35 <= variable_LastX <= 0.65:
+                    print("Ghost was Front! Force Slide Right")
+                    chassis_ctrl.move_with_time(90, 1.0)
+                
+                # 상태 리셋
+                variable_LastWidth = 0
+                variable_SafeCounter = 0
+            
+            # 진짜 안전함
+            else:
+                variable_SafeCounter = variable_SafeCounter + 1
+                
+                # 충분히 안전이 확인되면 속도 올림
+                if variable_SafeCounter > 30:
+                    led_ctrl.turn_off(rm_define.armor_top_all)
+                    chassis_ctrl.set_trans_speed(0.4)
+                else:
+                    led_ctrl.set_top_led(rm_define.armor_top_all, 0, 255, 255, rm_define.effect_breath)
+                    chassis_ctrl.set_trans_speed(0.15)
+                
+                chassis_ctrl.move(0)
+
+        time.sleep(0.01) # 반응속도 최상]]></python_code><scratch_description><![CDATA[]]></scratch_description></code></dji>
+        ===========================================================================================================================
