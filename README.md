@@ -8,7 +8,7 @@
 - [ ] Robomaster S1을 이용하여 python으로 어디까지 조작이 가능한지 파악하는 것
 
 ### 개인별 To-Do
-- **잔나영 (AI/Perception & Robot Compute, 파트 리더)**
+- **진나영 (AI/Perception & Robot Compute, 파트 리더)**
     - ex) 장애물 인식 파이프라인 후보 선정(카메라/라이다) + 입력/출력 스펙 정리
 
 - **조병현, 김현우 (Unity 디지털 트윈/가상환경, 파트 리더: 주마다 변경)**
@@ -113,7 +113,7 @@ flowchart LR
 ## 4. 팀 구성 및 역할 (총 5명)
 | 구성원 | 역할/담당 | 기술 스택(예시) | 파트 리더 |
 | :--- | :--- | :--- |:----:|
-| **잔나영** | AI를 통한 장애물 파악 및 로봇 연산 | Python, PyTorch, ROS(옵션), OpenCV |      |
+| **진나영** | AI를 통한 장애물 파악 및 로봇 연산 | Python, PyTorch, ROS(옵션), OpenCV |      |
 | **조병현** | Unity 기반 현실-가상 동기화 디지털 트윈 환경 제작(공동) | Unity, C#, (XR/VR SDK) |      |
 | **김현우** | Unity 기반 실시간 처리 무대(씬/상호작용) 제작(공동) | Unity, C#, (XR/VR SDK) |      |
 | **이대규** | 가상환경 ↔ 클라이언트/서버 연동 및 전체 상호작용 설계 | WebSocket, Python/Node, ROS bridge |      |
