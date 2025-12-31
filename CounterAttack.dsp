@@ -1,5 +1,8 @@
 <dji><attribute><creation_date>2025/12/30</creation_date><sign>3f0d917349426d69</sign><modify_time>12/31/2025 9:43:04 AM</modify_time><guid>bc6c63c730ad455ea5321cbe4b1c619d</guid><creator>Anonymous</creator><firmware_version_dependency>00.00.0000</firmware_version_dependency><title>CounterAttack</title><code_type>python</code_type><app_min_version></app_min_version><app_max_version></app_max_version></attribute><audio-list /><code><python_code><![CDATA[def start():
-    # 로봇 모드 설정 (Free 모드여야 짐벌과 차체가 따로 놉니다)
+    
+# 로봇이 공격을 당했을 때 어디서 맞았는지 감지하고 적을 향해 총구를 돌려 반격하며 반대 방향으로 후퇴하는 로직
+
+# 로봇 모드 설정 (Free 모드여야 짐벌과 차체가 따로 놉니다)
     robot_ctrl.set_mode(rm_define.robot_mode_free)
     
     # 짐벌 회전 속도 (도/초)
@@ -90,5 +93,6 @@
             # ---------------------------------------------------
             led_ctrl.set_top_led(rm_define.armor_top_all, 0, 0, 255, rm_define.effect_always_on)
             led_ctrl.set_bottom_led(hit_armor_id, 0, 0, 255, rm_define.effect_always_on)
+
 
         time.sleep(0.01)]]></python_code><scratch_description><![CDATA[]]></scratch_description></code></dji>
